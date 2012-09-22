@@ -21,13 +21,13 @@ public OnPluginStart() {
     //SetConVarInt(FindConVar("mp_teams_unbalance_limit"), 0); 
 
     HookEvent("player_hurt", handleHurt, EventHookMode_Pre)
+    HookEvent("player_spawn", handleSpawn, EventHookMode_Pre)
+    HookEvent("player_death", handleDeath, EventHookMode_Post)
     
     //HookEvent("player_join", handleJoin, EventHookMode_Pre)
     //HookEvent("player_leave", handleJoin, EventHookMode_Pre)
     
     // TODO: keep track of when a player leaves
-
-    HookEvent("player_death", handleDeath, EventHookMode_Post)
 }
 
 
@@ -55,27 +55,33 @@ public handleDeath(Handle:event, const String:name[], bool:dontBroadcast) {
 }
 
 
+public handleSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
+    setInfiniteClip(GetClientOfUserId(GetEventInt(event, "userid")))
+}
+
+
 public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     //ServerCommand("say debug-start")
 
     new userid = GetEventInt(event, "userid")
     new attacker = GetEventInt(event, "attacker")
     new client = GetClientOfUserId(userid)
+    new damadge = GetEventInt(event, "damageamount")
 
-    PrintToChat(client, "hurt %d ==[%d]==> %d", attacker,  userid)
+    //PrintToChat(client, "hurt %d ==[%d]==> %d", attacker, damadge, userid)
     //PrintToChat("say hurt %d ==> %d", attacker, userid)
 
     if (currentFlagHolder == 0) currentFlagHolder = userid // TODO handle this properly.
 
     //SetEntProp(client, Prop_Send, "m_iHealth", health, 1);
-    if (userid == currentFlagHolder && attacker != currentFlagHolder && attacker != 0) { // the only damadge is from others to the flagHolder
+    if (userid == currentFlagHolder && attacker != currentFlagHolder && attacker != 0) { // The flagholder dies when other hit him
         SetEntProp(client, Prop_Data, "m_iHealth", 0, 1);
 
         ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, attacker)
         currentFlagHolder = attacker
         instantRespawn(userid)
     }
-    else { // everything else kills you
+    else { // everything else doesn't do damadge
         new maxHealth = GetEntProp(client, Prop_Data, "m_iMaxHealth");
         SetEntProp(client, Prop_Data, "m_iHealth", maxHealth, 1);
     }
