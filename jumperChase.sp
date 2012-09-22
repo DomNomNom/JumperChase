@@ -36,15 +36,17 @@ public OnClientDisconnect(client) { }
 
 
 public instantRespawn(userid) {
-    //CreateTimer(0.1, Timer_ResetPlayer, GetClientUserId(userid))
-    CreateTimer(0.1, Timer_ResetPlayer, GetClientOfUserId(userid))
+    if (currentFlagHolder == userid) currentFlagHolder = 0; // reset the flag
+    SetEntProp(GetClientOfUserId(userid), Prop_Data, "m_iHealth", 0, 1); // make sure he's dead
+
+    CreateTimer(0.1, Timer_ResetPlayer, GetClientOfUserId(userid)) // schedule the respawn
 }
 public Action:Timer_ResetPlayer(Handle:timer, any:client) {
     //TODO test me
     if (!IsPlayerAlive(client))
         TF2_RespawnPlayer(client)
     else
-        PrintToConsole(client, "\n");
+        PrintToConsole(client, "[SM] Trying to respawn alive player\n");
 
 }
 
@@ -62,7 +64,6 @@ public handleSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
 
 public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     //ServerCommand("say debug-start")
-
     new userid = GetEventInt(event, "userid")
     new attacker = GetEventInt(event, "attacker")
     new client = GetClientOfUserId(userid)
@@ -74,9 +75,9 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     if (currentFlagHolder == 0) currentFlagHolder = userid // TODO handle this properly.
 
     //SetEntProp(client, Prop_Send, "m_iHealth", health, 1);
-    if (userid == currentFlagHolder && attacker != currentFlagHolder && attacker != 0) { // The flagholder dies when other hit him
-        SetEntProp(client, Prop_Data, "m_iHealth", 0, 1);
-
+    if (attacker == 0 && damadge >= 500)
+        instantRespawn(userid)
+    else if (userid == currentFlagHolder && attacker != currentFlagHolder && attacker != 0) { // The flagholder dies when other hit him
         ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, attacker)
         currentFlagHolder = attacker
         instantRespawn(userid)
@@ -86,7 +87,7 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
         SetEntProp(client, Prop_Data, "m_iHealth", maxHealth, 1);
     }
     
-    setInfiniteClip(client)
+    setInfiniteClip(client) // TODO: do this when the player fires
     
 
     //ServerCommand("say \"plugin debug: end\"")
@@ -95,6 +96,7 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     //return Plugin_Handled
     return _:Plugin_Changed
 }
+
 
 
 setInfiniteClip(client) {
@@ -125,7 +127,7 @@ stock SetAmmo(client, wepslot, newAmmo) {
 }
 
 
-// TODO try: CPrintToChatAll(), PrintCenterText(attacker, "TELEFRAG! You are a pro.")
+// TODO try: PrintCenterText(attacker, "TELEFRAG! You are a pro.")
 // SetEntProp(Hale, Prop_Send, "m_bGlowEnabled", 0);
 // SetEntProp(client, Prop_Send, "m_bGlowEnabled", 1);
 
