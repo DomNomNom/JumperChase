@@ -29,15 +29,15 @@ public OnPluginStart() {
 
     HookEvent("player_death", handleDeath, EventHookMode_Post)
 }
-//public OnMapEnd();
 
-public OnClientDisconnect(client) {
-}
+
+//public OnMapEnd();
+public OnClientDisconnect(client) { }
 
 
 public instantRespawn(userid) {
     //CreateTimer(0.1, Timer_ResetPlayer, GetClientUserId(userid))
-    CreateTimer(0.1, Timer_ResetPlayer, GetClientUserId(userid))
+    CreateTimer(0.1, Timer_ResetPlayer, GetClientOfUserId(userid))
 }
 public Action:Timer_ResetPlayer(Handle:timer, any:client) {
     //TODO test me
@@ -50,9 +50,7 @@ public Action:Timer_ResetPlayer(Handle:timer, any:client) {
 
 //public OnClientDied(attacker, victim, const String:weapon[], bool:headshot){
 public handleDeath(Handle:event, const String:name[], bool:dontBroadcast) {
-    PrintToConsole(client, "\n");
     instantRespawn(GetEventInt(event, "userid"))
-
     //return _:Plugin_Handled
 }
 
@@ -64,7 +62,7 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     new attacker = GetEventInt(event, "attacker")
     new client = GetClientOfUserId(userid)
 
-    //PrintToChat(client, "hurt %d ==> %d", attacker, userid)
+    PrintToChat(client, "hurt %d ==[%d]==> %d", attacker,  userid)
     //PrintToChat("say hurt %d ==> %d", attacker, userid)
 
     if (currentFlagHolder == 0) currentFlagHolder = userid // TODO handle this properly.
@@ -77,7 +75,6 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
         currentFlagHolder = attacker
         instantRespawn(userid)
     }
-    //if (attacker == userid || attacker == 0 || attacker == currentFlagHolder) { // no self/word damadge or damage from the currentFlagHolder
     else { // everything else kills you
         new maxHealth = GetEntProp(client, Prop_Data, "m_iMaxHealth");
         SetEntProp(client, Prop_Data, "m_iHealth", maxHealth, 1);
