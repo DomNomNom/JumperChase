@@ -8,10 +8,10 @@ new currentFlagHolder = 0
 
 
 public Plugin:myinfo = {
-    name = "noDamage",
+    name = "JumperChase",
     author = "Dominik Schmid",
-    description = "My first hook plugin",
-    version = "0.0.2",
+    description = "A mod about rocket jumping like crazy and hitting huge middies",
+    version = "0.0.3",
     url = "dominikschmid.de",
 }
 
@@ -23,6 +23,7 @@ public OnPluginStart() {
     HookEvent("player_hurt", handleHurt, EventHookMode_Pre)
     HookEvent("player_spawn", handleSpawn, EventHookMode_Pre)
     HookEvent("player_death", handleDeath, EventHookMode_Post)
+
     
     //HookEvent("player_join", handleJoin, EventHookMode_Pre)
     //HookEvent("player_leave", handleJoin, EventHookMode_Pre)
@@ -35,20 +36,7 @@ public OnPluginStart() {
 public OnClientDisconnect(client) { }
 
 
-public instantRespawn(userid) {
-    if (currentFlagHolder == userid) currentFlagHolder = 0; // reset the flag
-    SetEntProp(GetClientOfUserId(userid), Prop_Data, "m_iHealth", 0, 1); // make sure he's dead
 
-    CreateTimer(0.1, Timer_ResetPlayer, GetClientOfUserId(userid)) // schedule the respawn
-}
-public Action:Timer_ResetPlayer(Handle:timer, any:client) {
-    //TODO test me
-    if (!IsPlayerAlive(client))
-        TF2_RespawnPlayer(client)
-    else
-        PrintToConsole(client, "[SM] Trying to respawn alive player\n");
-
-}
 
 //public OnClientDied(attacker, victim, const String:weapon[], bool:headshot){
 public handleDeath(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -78,9 +66,8 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     if (attacker == 0 && damadge >= 500)
         instantRespawn(userid)
     else if (userid == currentFlagHolder && attacker != currentFlagHolder && attacker != 0) { // The flagholder dies when other hit him
-        ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, attacker)
-        currentFlagHolder = attacker
         instantRespawn(userid)
+        setFlagHolder(attacker)
     }
     else { // everything else doesn't do damadge
         new maxHealth = GetEntProp(client, Prop_Data, "m_iMaxHealth");
@@ -97,6 +84,15 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     return _:Plugin_Changed
 }
 
+
+setFlagHolder(userid) {
+    ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, userid)
+
+    if (currentFlagHolder != 0) SetEntProp(GetClientOfUserId(currentFlagHolder), Prop_Send, "m_bGlowEnabled", 0)
+    if (userid != 0)            SetEntProp(GetClientOfUserId(userid),            Prop_Send, "m_bGlowEnabled", 1)
+
+    currentFlagHolder = userid
+}
 
 
 setInfiniteClip(client) {
@@ -126,6 +122,19 @@ stock SetAmmo(client, wepslot, newAmmo) {
     //else ServerCommand("say [SetAmmo]: Invalid weapon slot: %d", wepslot)
 }
 
+
+public instantRespawn(userid) {
+    if (currentFlagHolder == userid) setFlagHolder(0); // reset the flag
+    SetEntProp(GetClientOfUserId(userid), Prop_Data, "m_iHealth", 0, 1); // make sure he's dead
+
+    CreateTimer(0.1, Timer_ResetPlayer, GetClientOfUserId(userid)) // schedule the respawn
+}
+public Action:Timer_ResetPlayer(Handle:timer, any:client) {
+    if (!IsPlayerAlive(client))
+        TF2_RespawnPlayer(client)
+    else
+        PrintToConsole(client, "[SM] Trying to respawn alive player\n");
+}
 
 // TODO try: PrintCenterText(attacker, "TELEFRAG! You are a pro.")
 // SetEntProp(Hale, Prop_Send, "m_bGlowEnabled", 0);
