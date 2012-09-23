@@ -21,10 +21,12 @@ public OnPluginStart() {
     //SetConVarInt(FindConVar("mp_teams_unbalance_limit"), 0); 
 
     HookEvent("player_hurt", handleHurt, EventHookMode_Pre)
-    HookEvent("player_spawn", handleSpawn, EventHookMode_Pre)
+    HookEvent("player_spawn", handleSpawn, EventHookMode_Post)
     HookEvent("player_death", handleDeath, EventHookMode_Post)
 
-    
+    HookEvent("post_inventory_application", handleResupply, EventHookMode_Post)
+    // TODO "post_inventory_application"
+
     //HookEvent("player_join", handleJoin, EventHookMode_Pre)
     //HookEvent("player_leave", handleJoin, EventHookMode_Pre)
     
@@ -36,7 +38,19 @@ public OnPluginStart() {
 public OnClientDisconnect(client) { }
 
 
+public handleResupply(Handle:event, const String:name[], bool:dontBroadcast) {
+    new userid = GetEventInt(event, "userid")
+    new client = GetClientOfUserId(userid)
 
+    setInfiniteClip(client)
+    if (TF2_GetPlayerClass(client) != TFClass_Soldier) {
+        TF2_SetPlayerClass(client, TFClass_Soldier, false, true)
+        ServerCommand("say resup")
+        TF2_RegeneratePlayer(client)
+    }
+    //instantDeath(userid)
+    //return _:Plugin_Handled
+}
 
 //public OnClientDied(attacker, victim, const String:weapon[], bool:headshot){
 public handleDeath(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -46,7 +60,19 @@ public handleDeath(Handle:event, const String:name[], bool:dontBroadcast) {
 
 
 public handleSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
-    setInfiniteClip(GetClientOfUserId(GetEventInt(event, "userid")))
+    /*
+    new userid = GetEventInt(event, "userid")
+    new client = GetClientOfUserId(userid)
+    setInfiniteClip(client)
+    ServerCommand("say class: %d", TFClass_Soldier)//TF2_GetPlayerClass(client))
+    if (TF2_GetPlayerClass(client) != TFClass_Soldier) {
+        //TF2_SetPlayerClass(client, TFClass_Soldier, false, true)
+        //SetEntProp(client, Prop_Data, "m_iHealth", -1, 1);
+        instantDeath(userid)
+    }
+    */
+    //PrintToChat(client, "\x04[!]\x01 You are restricted to one class.");
+    //TF2_RespawnPlayer(client);
 }
 
 
@@ -84,6 +110,19 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     return _:Plugin_Changed
 }
 
+SendDeathMessage(attacker, victim, const String:weapon[], bool:headshot) {
+    new Handle:event = CreateEvent("player_death")
+    if (event == INVALID_HANDLE)
+    {
+        return
+    }
+ 
+    SetEventInt(event, "userid", GetClientUserId(victim))
+    SetEventInt(event, "attacker", GetClientUserId(attacker))
+    SetEventString(event, "weapon", weapon)
+    SetEventBool(event, "headshot", headshot)
+    FireEvent(event)
+}
 
 setFlagHolder(userid) {
     ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, userid)
@@ -122,6 +161,13 @@ stock SetAmmo(client, wepslot, newAmmo) {
     //else ServerCommand("say [SetAmmo]: Invalid weapon slot: %d", wepslot)
 }
 
+public instantDeath(userid) {
+    CreateTimer(0.1, Timer_KillPlayer, GetClientOfUserId(userid)) // schedule the respawn
+}
+public Action:Timer_KillPlayer(Handle:timer, any:client) {
+    SetEntProp(client, Prop_Data, "m_iHealth", 0, 1); // make sure he's dead
+    ServerCommand("say DIE!")
+}
 
 public instantRespawn(userid) {
     if (currentFlagHolder == userid) setFlagHolder(0); // reset the flag
@@ -136,9 +182,9 @@ public Action:Timer_ResetPlayer(Handle:timer, any:client) {
         PrintToConsole(client, "[SM] Trying to respawn alive player\n");
 }
 
+
+
 // TODO try: PrintCenterText(attacker, "TELEFRAG! You are a pro.")
-// SetEntProp(Hale, Prop_Send, "m_bGlowEnabled", 0);
-// SetEntProp(client, Prop_Send, "m_bGlowEnabled", 1);
 
 /*
 stock ForceTeamWin(team)
