@@ -4,14 +4,16 @@
  
 
 
-new currentFlagHolder = 0
+new currentFlagHolder = 0;
+
+new WORLD = 0; // Just a constant to hold the userID of the world. TODO: try using a #define
 
 
 public Plugin:myinfo = {
     name = "JumperChase",
     author = "Dominik Schmid",
     description = "A mod about rocket jumping like crazy and hitting huge middies",
-    version = "0.0.3",
+    version = "0.0.4",
     url = "dominikschmid.de",
 }
 
@@ -42,13 +44,14 @@ public handleResupply(Handle:event, const String:name[], bool:dontBroadcast) {
     new userid = GetEventInt(event, "userid")
     new client = GetClientOfUserId(userid)
 
-    setInfiniteClip(client)
+    // Force the class to solider. TODO: or demoman
     if (TF2_GetPlayerClass(client) != TFClass_Soldier) {
-        TF2_SetPlayerClass(client, TFClass_Soldier, false, true)
         ServerCommand("say resup")
+        TF2_SetPlayerClass(client, TFClass_Soldier, false, true)
         TF2_RegeneratePlayer(client)
     }
-    //instantDeath(userid)
+
+    setInfiniteClip(client)
     //return _:Plugin_Handled
 }
 
@@ -86,12 +89,12 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     //PrintToChat(client, "hurt %d ==[%d]==> %d", attacker, damadge, userid)
     //PrintToChat("say hurt %d ==> %d", attacker, userid)
 
-    if (currentFlagHolder == 0) currentFlagHolder = userid // TODO handle this properly.
+    if (currentFlagHolder == WORLD) currentFlagHolder = userid // TODO handle this properly.
 
     //SetEntProp(client, Prop_Send, "m_iHealth", health, 1);
-    if (attacker == 0 && damadge >= 500)
+    if (attacker == WORLD && damadge >= 500) // kill the player if the world is trying to kill him
         instantRespawn(userid)
-    else if (userid == currentFlagHolder && attacker != currentFlagHolder && attacker != 0) { // The flagholder dies when other hit him
+    else if ((currentFlagHolder == userid || currentFlagHolder == WORLD)  && attacker != currentFlagHolder && attacker != WORLD) { // The flagholder dies when other hit him
         instantRespawn(userid)
         setFlagHolder(attacker)
     }
@@ -110,34 +113,23 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     return _:Plugin_Changed
 }
 
-SendDeathMessage(attacker, victim, const String:weapon[], bool:headshot) {
-    new Handle:event = CreateEvent("player_death")
-    if (event == INVALID_HANDLE)
-    {
-        return
-    }
- 
-    SetEventInt(event, "userid", GetClientUserId(victim))
-    SetEventInt(event, "attacker", GetClientUserId(attacker))
-    SetEventString(event, "weapon", weapon)
-    SetEventBool(event, "headshot", headshot)
-    FireEvent(event)
-}
 
 setFlagHolder(userid) {
     ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, userid)
 
-    if (currentFlagHolder != 0) SetEntProp(GetClientOfUserId(currentFlagHolder), Prop_Send, "m_bGlowEnabled", 0)
-    if (userid != 0)            SetEntProp(GetClientOfUserId(userid),            Prop_Send, "m_bGlowEnabled", 1)
+    if (currentFlagHolder != WORLD) SetEntProp(GetClientOfUserId(currentFlagHolder), Prop_Send, "m_bGlowEnabled", 0)
+    if (userid            != WORLD) SetEntProp(GetClientOfUserId(userid),            Prop_Send, "m_bGlowEnabled", 1)
 
     currentFlagHolder = userid
 }
 
 
 setInfiniteClip(client) {
+    // TODO: call me everytime the ammo capacity changes
+    //       or remove the secondary weapon
     SetClip(client, 0, 99)
-    SetClip(client, 1, 0)
     SetAmmo(client, 0, 99)
+    SetClip(client, 1, 0)
     SetAmmo(client, 1, 0)
 }
 
@@ -161,21 +153,14 @@ stock SetAmmo(client, wepslot, newAmmo) {
     //else ServerCommand("say [SetAmmo]: Invalid weapon slot: %d", wepslot)
 }
 
-public instantDeath(userid) {
-    CreateTimer(0.1, Timer_KillPlayer, GetClientOfUserId(userid)) // schedule the respawn
-}
-public Action:Timer_KillPlayer(Handle:timer, any:client) {
-    SetEntProp(client, Prop_Data, "m_iHealth", 0, 1); // make sure he's dead
-    ServerCommand("say DIE!")
-}
 
 public instantRespawn(userid) {
-    if (currentFlagHolder == userid) setFlagHolder(0); // reset the flag
+    if (currentFlagHolder == userid) setFlagHolder(WORLD); // reset the flag
     SetEntProp(GetClientOfUserId(userid), Prop_Data, "m_iHealth", 0, 1); // make sure he's dead
 
-    CreateTimer(0.1, Timer_ResetPlayer, GetClientOfUserId(userid)) // schedule the respawn
+    CreateTimer(0.1, Timer_RespawnPlayer, GetClientOfUserId(userid)) // schedule the respawn
 }
-public Action:Timer_ResetPlayer(Handle:timer, any:client) {
+public Action:Timer_RespawnPlayer(Handle:timer, any:client) {
     if (!IsPlayerAlive(client))
         TF2_RespawnPlayer(client)
     else
