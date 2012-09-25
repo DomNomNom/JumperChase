@@ -5,7 +5,9 @@
 
 
 new currentFlagHolder = 0;
-new bool:controlPointEnabled = false; // note this is currently used for something else
+
+new Handle:doorchecktimer = INVALID_HANDLE; // checks that the doors are open at all times
+new checkdoors = true;
 
 new WORLD = 0; // Just a constant to hold the userID of the world. TODO: try using a #define
 
@@ -20,7 +22,6 @@ public Plugin:myinfo = {
 
 
 public OnPluginStart() {
-    SetConVarInt(FindConVar("mp_teams_unbalance_limit"), 0); 
     //SetConVarInt(FindConVar("mp_teams_unbalance_limit"), 0); 
 
     HookEvent("player_hurt", handleHurt, EventHookMode_Pre)
@@ -29,17 +30,20 @@ public OnPluginStart() {
 
     HookEvent("post_inventory_application", handleResupply, EventHookMode_Post)
 
-    SetControlPoint(false)
+    //initMap()
 
     //HookEvent("player_join", handleJoin, EventHookMode_Pre)
     //HookEvent("player_leave", handleJoin, EventHookMode_Pre)
-    
-    // TODO: keep track of when a player leaves
 }
 
 
-//public OnMapEnd();
-public OnClientDisconnect(client) { }
+public OnMapStart() {
+    initMap()
+}
+
+public OnClientDisconnect(client) {
+    // TODO: check whether the flag holder left
+}
 
 
 public handleResupply(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -55,6 +59,17 @@ public handleResupply(Handle:event, const String:name[], bool:dontBroadcast) {
 
     setInfiniteClip(client)
     //return _:Plugin_Handled
+}
+
+public initMap() {
+    SetControlPoint(false) // don't enable manual capture of the point
+
+    // remove spawn protection (doors)
+    if (doorchecktimer == INVALID_HANDLE)
+        doorchecktimer = CreateTimer(5.0, Timer_CheckDoors, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
+    ServerCommand("sv_cheats 1")
+    ServerCommand("ent_remove_all func_respawnroomvisualizer") // This kinda does irrepairable damadge to the map. TODO find a nicer way
+    ServerCommand("sv_cheats 0")
 }
 
 //public OnClientDied(attacker, victim, const String:weapon[], bool:headshot){
@@ -88,8 +103,8 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     new client = GetClientOfUserId(userid)
     new damadge = GetEventInt(event, "damageamount")
 
-    controlPointEnabled = !controlPointEnabled;
-    SetDoorState(controlPointEnabled);
+    //controlPointEnabled = !controlPointEnabled;
+    //SetDoorState(controlPointEnabled);
 
     //PrintToChat(client, "hurt %d ==[%d]==> %d", attacker, damadge, userid)
     //PrintToChat("say hurt %d ==> %d", attacker, userid)
@@ -174,6 +189,21 @@ public Action:Timer_RespawnPlayer(Handle:timer, any:client) {
 }
 
 
+public Action:Timer_CheckDoors(Handle:timer) {
+    if (!checkdoors) { // when we should stop
+        doorchecktimer = INVALID_HANDLE;
+        return Plugin_Stop;
+    }
+
+    // open all doors
+    new ent = -1;
+    while ((ent = FindEntityByClassname2(ent, "func_door")) != -1) {
+        AcceptEntityInput(ent, "Open");
+        AcceptEntityInput(ent, "Unlock");
+    }
+    return Plugin_Continue;
+}
+
 
 // TODO try: PrintCenterText(attacker, "TELEFRAG! You are a pro.")
 
@@ -191,24 +221,10 @@ stock ForceTeamWin(team) {
 */
 
 
-stock SetDoorState(bool:open) {
-    new CPm=-1; //CP = -1;
-    while ((CPm = FindEntityByClassname2(CPm, "team_control_point")) != -1) {
-        if (CPm > MaxClients && IsValidEdict(CPm)) {
-            /* TODO: unlock doors
-            ServerCommand("say locking controlPoint")
-            AcceptEntityInput(CPm, (open ? "ShowModel" : "HideModel"));
-            SetVariantInt(open ? 0 : 1);
-            AcceptEntityInput(CPm, "SetLocked");
-            */
-        }
-    }
-}
 stock SetControlPoint(bool:enable) {
     new CPm=-1; //CP = -1;
     while ((CPm = FindEntityByClassname2(CPm, "team_control_point")) != -1) {
         if (CPm > MaxClients && IsValidEdict(CPm)) {
-            ServerCommand("say locking controlPoint")
             AcceptEntityInput(CPm, (enable ? "ShowModel" : "HideModel"));
             SetVariantInt(enable ? 0 : 1);
             AcceptEntityInput(CPm, "SetLocked");
