@@ -58,6 +58,7 @@ public handleResupply(Handle:event, const String:name[], bool:dontBroadcast) {
     }
 
     setInfiniteClip(client)
+    TF2_RemoveWeaponSlot(client, 1); // disallow the shotgun
     //return _:Plugin_Handled
 }
 
@@ -146,12 +147,8 @@ setFlagHolder(userid) {
 
 
 setInfiniteClip(client) {
-    // TODO: call me everytime the ammo capacity changes
-    //       or remove the secondary weapon
     SetClip(client, 0, 99)
-    SetAmmo(client, 0, 99)
-    SetClip(client, 1, 0)
-    SetAmmo(client, 1, 0)
+    SetAmmo(client, 0, 20)
 }
 
 // TFClassType:g_tfctPlayerClass[MAXPLAYERS+1];
