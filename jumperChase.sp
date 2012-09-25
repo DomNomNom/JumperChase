@@ -5,6 +5,7 @@
 
 
 new currentFlagHolder = 0;
+new bool:controlPointEnabled = false; // note this is currently used for something else
 
 new WORLD = 0; // Just a constant to hold the userID of the world. TODO: try using a #define
 
@@ -27,7 +28,8 @@ public OnPluginStart() {
     HookEvent("player_death", handleDeath, EventHookMode_Post)
 
     HookEvent("post_inventory_application", handleResupply, EventHookMode_Post)
-    // TODO "post_inventory_application"
+
+    SetControlPoint(false)
 
     //HookEvent("player_join", handleJoin, EventHookMode_Pre)
     //HookEvent("player_leave", handleJoin, EventHookMode_Pre)
@@ -46,7 +48,7 @@ public handleResupply(Handle:event, const String:name[], bool:dontBroadcast) {
 
     // Force the class to solider. TODO: or demoman
     if (TF2_GetPlayerClass(client) != TFClass_Soldier) {
-        ServerCommand("say resup")
+        //ServerCommand("say resup")
         TF2_SetPlayerClass(client, TFClass_Soldier, false, true)
         TF2_RegeneratePlayer(client)
     }
@@ -86,17 +88,21 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     new client = GetClientOfUserId(userid)
     new damadge = GetEventInt(event, "damageamount")
 
+    controlPointEnabled = !controlPointEnabled;
+    SetDoorState(controlPointEnabled);
+
     //PrintToChat(client, "hurt %d ==[%d]==> %d", attacker, damadge, userid)
     //PrintToChat("say hurt %d ==> %d", attacker, userid)
 
-    if (currentFlagHolder == WORLD) currentFlagHolder = userid // TODO handle this properly.
+    //if (currentFlagHolder == WORLD) currentFlagHolder = userid // TODO handle this properly.
 
     //SetEntProp(client, Prop_Send, "m_iHealth", health, 1);
     if (attacker == WORLD && damadge >= 500) // kill the player if the world is trying to kill him
         instantRespawn(userid)
-    else if ((currentFlagHolder == userid || currentFlagHolder == WORLD)  && attacker != currentFlagHolder && attacker != WORLD) { // The flagholder dies when other hit him
-        instantRespawn(userid)
+    //(currentFlagHolder == userid || currentFlagHolder == WORLD)  && attacker != currentFlagHolder && attacker != WORLD) { // The flagholder dies when other hit him
+    else if (attacker!=WORLD && attacker!=userid && (currentFlagHolder==userid || currentFlagHolder==WORLD)) {
         setFlagHolder(attacker)
+        instantRespawn(userid)
     }
     else { // everything else doesn't do damadge
         new maxHealth = GetEntProp(client, Prop_Data, "m_iMaxHealth");
@@ -172,11 +178,9 @@ public Action:Timer_RespawnPlayer(Handle:timer, any:client) {
 // TODO try: PrintCenterText(attacker, "TELEFRAG! You are a pro.")
 
 /*
-stock ForceTeamWin(team)
-{
+stock ForceTeamWin(team) {
     new ent = FindEntityByClassname2(-1, "team_control_point_master");
-    if (ent == -1)
-    {
+    if (ent == -1) {
         ent = CreateEntityByName("team_control_point_master");
         DispatchSpawn(ent);
         AcceptEntityInput(ent, "Enable");
@@ -185,21 +189,38 @@ stock ForceTeamWin(team)
     AcceptEntityInput(ent, "SetWinner");
 }
 */
-/*
-stock SetControlPoint(bool:enable)
-{
+
+
+stock SetDoorState(bool:open) {
     new CPm=-1; //CP = -1;
-    while ((CPm = FindEntityByClassname2(CPm, "team_control_point")) != -1)
-    {
-        if (CPm > MaxClients && IsValidEdict(CPm))
-        {
+    while ((CPm = FindEntityByClassname2(CPm, "team_control_point")) != -1) {
+        if (CPm > MaxClients && IsValidEdict(CPm)) {
+            /* TODO: unlock doors
+            ServerCommand("say locking controlPoint")
+            AcceptEntityInput(CPm, (open ? "ShowModel" : "HideModel"));
+            SetVariantInt(open ? 0 : 1);
+            AcceptEntityInput(CPm, "SetLocked");
+            */
+        }
+    }
+}
+stock SetControlPoint(bool:enable) {
+    new CPm=-1; //CP = -1;
+    while ((CPm = FindEntityByClassname2(CPm, "team_control_point")) != -1) {
+        if (CPm > MaxClients && IsValidEdict(CPm)) {
+            ServerCommand("say locking controlPoint")
             AcceptEntityInput(CPm, (enable ? "ShowModel" : "HideModel"));
             SetVariantInt(enable ? 0 : 1);
             AcceptEntityInput(CPm, "SetLocked");
         }
     }
 }
-*/
+stock FindEntityByClassname2(startEnt, const String:classname[]) {
+    /* If startEnt isn't valid shifting it back to the nearest valid one */
+    while (startEnt > -1 && !IsValidEntity(startEnt)) startEnt--;
+    return FindEntityByClassname(startEnt, classname);
+}
+
 /*stock SetArenaCapEnableTime(Float:time)
 {
     new ent = -1;
