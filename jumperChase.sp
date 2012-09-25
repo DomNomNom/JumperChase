@@ -104,15 +104,8 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     new client = GetClientOfUserId(userid)
     new damadge = GetEventInt(event, "damageamount")
 
-    //controlPointEnabled = !controlPointEnabled;
-    //SetDoorState(controlPointEnabled);
-
     //PrintToChat(client, "hurt %d ==[%d]==> %d", attacker, damadge, userid)
-    //PrintToChat("say hurt %d ==> %d", attacker, userid)
 
-    //if (currentFlagHolder == WORLD) currentFlagHolder = userid // TODO handle this properly.
-
-    //SetEntProp(client, Prop_Send, "m_iHealth", health, 1);
     if (attacker == WORLD && damadge >= 500) // kill the player if the world is trying to kill him
         instantRespawn(userid)
     //(currentFlagHolder == userid || currentFlagHolder == WORLD)  && attacker != currentFlagHolder && attacker != WORLD) { // The flagholder dies when other hit him
