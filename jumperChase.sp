@@ -11,12 +11,13 @@ new checkdoors = true;
 
 new WORLD = 0; // Just a constant to hold the userID of the world. TODO: try using a #define
 
+new pointOwner = 0; // the team that currently owns the point
 
 public Plugin:myinfo = {
     name = "JumperChase",
     author = "Dominik Schmid",
     description = "A mod about rocket jumping like crazy and hitting huge middies",
-    version = "0.0.4",
+    version = "0.0.5",
     url = "dominikschmid.de",
 }
 
@@ -34,6 +35,11 @@ public OnPluginStart() {
 
     //HookEvent("player_join", handleJoin, EventHookMode_Pre)
     //HookEvent("player_leave", handleJoin, EventHookMode_Pre)
+    for (new client = 0; client <= MaxClients; client++) {
+        //if (IsValidClient(client, false)) SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
+        if (!IsValidClient(client)) continue;
+        SetEntProp(client, Prop_Send, "m_bGlowEnabled", 0)
+    }
 }
 
 
@@ -80,21 +86,7 @@ public handleDeath(Handle:event, const String:name[], bool:dontBroadcast) {
 }
 
 
-public handleSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
-    /*
-    new userid = GetEventInt(event, "userid")
-    new client = GetClientOfUserId(userid)
-    setInfiniteClip(client)
-    ServerCommand("say class: %d", TFClass_Soldier)//TF2_GetPlayerClass(client))
-    if (TF2_GetPlayerClass(client) != TFClass_Soldier) {
-        //TF2_SetPlayerClass(client, TFClass_Soldier, false, true)
-        //SetEntProp(client, Prop_Data, "m_iHealth", -1, 1);
-        instantDeath(userid)
-    }
-    */
-    //PrintToChat(client, "\x04[!]\x01 You are restricted to one class.");
-    //TF2_RespawnPlayer(client);
-}
+public handleSpawn(Handle:event, const String:name[], bool:dontBroadcast) { }
 
 
 public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -104,6 +96,8 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     new client = GetClientOfUserId(userid)
     new damadge = GetEventInt(event, "damageamount")
 
+    pointOwner += 1;
+    SetControlPointOwner(pointOwner);
     //PrintToChat(client, "hurt %d ==[%d]==> %d", attacker, damadge, userid)
 
     if (attacker == WORLD && damadge >= 500) // kill the player if the world is trying to kill him
@@ -131,6 +125,7 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
 
 setFlagHolder(userid) {
     ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, userid)
+    //PrintCenterText(GetClientOfUserId(userid), "YOU ARE IT!")
 
     if (currentFlagHolder != WORLD) SetEntProp(GetClientOfUserId(currentFlagHolder), Prop_Send, "m_bGlowEnabled", 0)
     if (userid            != WORLD) SetEntProp(GetClientOfUserId(userid),            Prop_Send, "m_bGlowEnabled", 1)
@@ -144,7 +139,6 @@ setInfiniteClip(client) {
     SetAmmo(client, 0, 20)
 }
 
-// TFClassType:g_tfctPlayerClass[MAXPLAYERS+1];
 stock SetClip(client, wepslot, newAmmo) {
     new weapon = GetPlayerWeaponSlot(client, wepslot);
     if (IsValidEntity(weapon)) {
@@ -210,6 +204,56 @@ stock ForceTeamWin(team) {
 }
 */
 
+stock SetControlPointOwner(team) {
+    //SetControlPoint(true);
+    new ent=-1; //CP = -1;
+    while ((ent = FindEntityByClassname2(ent, "team_control_point")) != -1) {
+        if (ent > MaxClients && IsValidEdict(ent)) {
+            //ServerCommand("say changed owner %d", team)
+
+            //AcceptEntityInput(ent,  "ShowModel");
+            SetVariantInt(team);
+            AcceptEntityInput(ent, "SetOwner");
+            //SetVariantInt(team);
+            //AcceptEntityInput(ent, "FireUser1");
+
+/*
+            new String:addoutput[64];
+            Format(addoutput, sizeof(addoutput), "OnUser1 !self:setowner:%i:0:1",team);
+            SetVariantString(addoutput);
+            AcceptEntityInput(ent, "AddOutput");
+            AcceptEntityInput(ent, "FireUser1");
+*/
+
+            // "controlpoint_updateowner"
+
+            
+            //name: controlpoint_updateowner
+            //short:   index  -  index of the cap being updated
+
+            // teamplay_round_start
+            
+            new Handle:event = CreateEvent("controlpoint_starttouch")
+            if (event == INVALID_HANDLE) {
+                ServerCommand("say INVALID_HANDLE!")
+                return
+            }
+            
+         
+            //SetEventInt(event, "userid", GetClientUserId(victim))
+            //SetEventInt(event, "attacker", GetClientUserId(attacker))
+            //SetEventString(event, "weapon", weapon)
+            //SetEventBool(event, "headshot", headshot)
+            FireEvent(event)
+
+            //ServerCommand("say success!")
+        }
+    }
+
+    //ent = FindEntityByClassname2(-1, "team_control_point_master");
+    //SetVariantInt(team);
+    //AcceptEntityInput(ent, "SetWinner");
+}
 
 stock SetControlPoint(bool:enable) {
     new CPm=-1; //CP = -1;
@@ -225,6 +269,15 @@ stock FindEntityByClassname2(startEnt, const String:classname[]) {
     /* If startEnt isn't valid shifting it back to the nearest valid one */
     while (startEnt > -1 && !IsValidEntity(startEnt)) startEnt--;
     return FindEntityByClassname(startEnt, classname);
+}
+
+stock bool:IsValidClient(client, bool:replaycheck = true) {
+    if (client <= 0 || client > MaxClients) return false;
+    if (!IsClientInGame(client)) return false;
+    if (GetEntProp(client, Prop_Send, "m_bIsCoaching")) return false;
+    if (replaycheck)
+        if (IsClientSourceTV(client) || IsClientReplay(client)) return false;
+    return true;
 }
 
 /*stock SetArenaCapEnableTime(Float:time)
