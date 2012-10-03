@@ -1,7 +1,7 @@
 #include <sourcemod>
 #include <sdktools>
 #include <tf2_stocks> // respawn
- 
+
 
 
 new currentFlagHolder = 0;
@@ -12,6 +12,10 @@ new checkdoors = true;
 new WORLD = 0; // Just a constant to hold the userID of the world. TODO: try using a #define
 
 new pointOwner = 0; // the team that currently owns the point
+
+#define TEAM_FLAG  2
+#define TEAM_NON_FLAG  3
+
 
 public Plugin:myinfo = {
     name = "JumperChase",
@@ -24,21 +28,21 @@ public Plugin:myinfo = {
 
 public OnPluginStart() {
     //SetConVarInt(FindConVar("mp_teams_unbalance_limit"), 0); 
+    //initMap()
 
     HookEvent("player_hurt", handleHurt, EventHookMode_Pre)
     HookEvent("player_spawn", handleSpawn, EventHookMode_Post)
     HookEvent("player_death", handleDeath, EventHookMode_Post)
 
     HookEvent("post_inventory_application", handleResupply, EventHookMode_Post)
-
-    //initMap()
+    HookEvent("player_team", handleTeamChange, EventHookMode_Pre)
 
     //HookEvent("player_join", handleJoin, EventHookMode_Pre)
     //HookEvent("player_leave", handleJoin, EventHookMode_Pre)
     for (new client = 0; client <= MaxClients; client++) {
-        //if (IsValidClient(client, false)) SDKHook(client, SDKHook_OnTakeDamage, OnTakeDamage);
         if (!IsValidClient(client)) continue;
         SetEntProp(client, Prop_Send, "m_bGlowEnabled", 0)
+        // TODO check team
     }
 }
 
@@ -51,6 +55,9 @@ public OnClientDisconnect(client) {
     // TODO: check whether the flag holder left
 }
 
+public handleTeamChange(Handle:event, const String:name[], bool:dontBroadcast) {
+    checkTeam(GetEventInt(event, "userid"))
+}
 
 public handleResupply(Handle:event, const String:name[], bool:dontBroadcast) {
     new userid = GetEventInt(event, "userid")
@@ -68,12 +75,20 @@ public handleResupply(Handle:event, const String:name[], bool:dontBroadcast) {
     //return _:Plugin_Handled
 }
 
+public checkTeam(userid) {
+
+}
+
 public initMap() {
+    ServerCommand("mp_teams_unbalance_limit 0")
+    ServerCommand("mp_friendlyfire 1")
+
+
     SetControlPoint(false) // don't enable manual capture of the point
 
     // remove spawn protection (doors)
     if (doorchecktimer == INVALID_HANDLE)
-        doorchecktimer = CreateTimer(5.0, Timer_CheckDoors, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
+        doorchecktimer = CreateTimer(1.0, Timer_CheckDoors, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
     ServerCommand("sv_cheats 1")
     ServerCommand("ent_remove_all func_respawnroomvisualizer") // This kinda does irrepairable damadge to the map. TODO find a nicer way
     ServerCommand("sv_cheats 0")
@@ -86,7 +101,18 @@ public handleDeath(Handle:event, const String:name[], bool:dontBroadcast) {
 }
 
 
-public handleSpawn(Handle:event, const String:name[], bool:dontBroadcast) { }
+public handleSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
+    new userid = GetEventInt(event, "userid")
+    new client = GetClientOfUserId(userid)
+    new team = GetClientTeam(client)
+    
+
+    // Force the class to solider. TODO: or demoman
+    if (team == TEAM_FLAG  &&  userid != currentFlagHolder) {
+        ChangeClientTeam(client, TEAM_NON_FLAG)
+        TF2_RegeneratePlayer(client)
+    }
+}
 
 
 public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -123,22 +149,35 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
 }
 
 
+// SET FLAG HOLDER
+
 setFlagHolder(userid) {
     ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, userid)
     //PrintCenterText(GetClientOfUserId(userid), "YOU ARE IT!")
+    new oldFlagHolder = GetClientOfUserId(currentFlagHolder)
+    new newFlagHolder = GetClientOfUserId(userid)
 
-    if (currentFlagHolder != WORLD) SetEntProp(GetClientOfUserId(currentFlagHolder), Prop_Send, "m_bGlowEnabled", 0)
-    if (userid            != WORLD) SetEntProp(GetClientOfUserId(userid),            Prop_Send, "m_bGlowEnabled", 1)
-
+    if (IsValidClient(oldFlagHolder)) {
+        SetEntProp(oldFlagHolder, Prop_Send, "m_bGlowEnabled", 0);
+        ChangeClientTeam(oldFlagHolder, TEAM_NON_FLAG);
+    }
+    if (IsValidClient(newFlagHolder)) {
+        SetEntProp(newFlagHolder, Prop_Send, "m_bGlowEnabled", 1)
+        ChangeClientTeam(newFlagHolder, TEAM_FLAG);
+    }
+    
     currentFlagHolder = userid
 }
 
+
+
+
+// CLIP
 
 setInfiniteClip(client) {
     SetClip(client, 0, 99)
     SetAmmo(client, 0, 20)
 }
-
 stock SetClip(client, wepslot, newAmmo) {
     new weapon = GetPlayerWeaponSlot(client, wepslot);
     if (IsValidEntity(weapon)) {
@@ -160,7 +199,6 @@ stock SetAmmo(client, wepslot, newAmmo) {
 
 
 public instantRespawn(userid) {
-    if (currentFlagHolder == userid) setFlagHolder(WORLD); // reset the flag
     SetEntProp(GetClientOfUserId(userid), Prop_Data, "m_iHealth", 0, 1); // make sure he's dead
 
     CreateTimer(0.1, Timer_RespawnPlayer, GetClientOfUserId(userid)) // schedule the respawn
@@ -188,8 +226,6 @@ public Action:Timer_CheckDoors(Handle:timer) {
     return Plugin_Continue;
 }
 
-
-// TODO try: PrintCenterText(attacker, "TELEFRAG! You are a pro.")
 
 /*
 stock ForceTeamWin(team) {
@@ -225,9 +261,6 @@ stock SetControlPointOwner(team) {
             AcceptEntityInput(ent, "FireUser1");
 */
 
-            // "controlpoint_updateowner"
-
-            
             //name: controlpoint_updateowner
             //short:   index  -  index of the cap being updated
 
@@ -238,8 +271,6 @@ stock SetControlPointOwner(team) {
                 ServerCommand("say INVALID_HANDLE!")
                 return
             }
-            
-         
             //SetEventInt(event, "userid", GetClientUserId(victim))
             //SetEventInt(event, "attacker", GetClientUserId(attacker))
             //SetEventString(event, "weapon", weapon)
