@@ -4,6 +4,10 @@
 
 
 
+new Float:FlagHolderOrigin[3];
+new Float:FlagHolderAngles[3];
+new shouldRespawn = false;
+
 new currentFlagHolder = 0;
 
 new Handle:doorchecktimer = INVALID_HANDLE; // checks that the doors are open at all times
@@ -39,10 +43,11 @@ public OnPluginStart() {
 
     //HookEvent("player_join", handleJoin, EventHookMode_Pre)
     //HookEvent("player_leave", handleJoin, EventHookMode_Pre)
+    setFlagHolder(WORLD)
     for (new client = 0; client <= MaxClients; client++) {
         if (!IsValidClient(client)) continue;
         SetEntProp(client, Prop_Send, "m_bGlowEnabled", 0)
-        // TODO check team
+        checkTeam(client)
     }
 }
 
@@ -126,10 +131,11 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     SetControlPointOwner(pointOwner);
     //PrintToChat(client, "hurt %d ==[%d]==> %d", attacker, damadge, userid)
 
-    if (attacker == WORLD && damadge >= 500) // kill the player if the world is trying to kill him
+    if (attacker == WORLD && damadge >= 500) { // kill the player if the world is trying to kill him
         instantRespawn(userid)
+    }
     //(currentFlagHolder == userid || currentFlagHolder == WORLD)  && attacker != currentFlagHolder && attacker != WORLD) { // The flagholder dies when other hit him
-    else if (attacker!=WORLD && attacker!=userid && (currentFlagHolder==userid || currentFlagHolder==WORLD)) {
+    else if (attacker!=WORLD && attacker!=userid && (currentFlagHolder==userid || (currentFlagHolder)==WORLD)) {
         setFlagHolder(attacker)
         instantRespawn(userid)
     }
@@ -149,6 +155,8 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
 }
 
 
+
+
 // SET FLAG HOLDER
 
 setFlagHolder(userid) {
@@ -164,10 +172,24 @@ setFlagHolder(userid) {
     if (IsValidClient(newFlagHolder)) {
         SetEntProp(newFlagHolder, Prop_Send, "m_bGlowEnabled", 1)
         ChangeClientTeam(newFlagHolder, TEAM_FLAG);
+        GetClientAbsOrigin(newFlagHolder, FlagHolderOrigin); 
+        GetClientAbsAngles(newFlagHolder, FlagHolderAngles);
+        shouldRespawn = true;
     }
+
+
+    //TeleportEntity(newFlagHolder, Spawn, SpawnAngles, vel)
+
+
+    // TODO TeleportEntity(client,g_fArenaSpawnOrigin[arena_index
+    // ][RandomSpawn[i]],g_fArenaSpawnAngles[arena_index][RandomSpawn[i]],vel)
+    // ;
+
     
     currentFlagHolder = userid
 }
+
+
 
 
 
@@ -204,11 +226,23 @@ public instantRespawn(userid) {
     CreateTimer(0.1, Timer_RespawnPlayer, GetClientOfUserId(userid)) // schedule the respawn
 }
 public Action:Timer_RespawnPlayer(Handle:timer, any:client) {
-    if (!IsPlayerAlive(client))
+    if (!IsPlayerAlive(client)) {
         TF2_RespawnPlayer(client)
+        if (client == GetClientOfUserId(currentFlagHolder)) {
+            if (shouldRespawn) {
+                SetEntProp(client, Prop_Send, "m_bGlowEnabled", 1)
+                TeleportEntity(client, FlagHolderOrigin, FlagHolderAngles, NULL_VECTOR)
+                shouldRespawn = false;
+            }
+            else 
+                setFlagHolder(WORLD);
+        }
+    }
     else
         PrintToConsole(client, "[SM] Trying to respawn alive player\n");
 }
+
+
 
 
 public Action:Timer_CheckDoors(Handle:timer) {
