@@ -3,6 +3,12 @@
 #include <tf2_stocks> // respawn
 #include <sdkhooks>
 
+#define TEAM_FLAG  2
+#define TEAM_NON_FLAG  3
+
+
+#define UBER_TIME 3.0
+new flagHolderUbererd = false;
 
 new Float:FlagHolderOrigin[3];
 new Float:FlagHolderAngles[3];
@@ -19,9 +25,6 @@ new checkdoors = true;
 new WORLD = 0; // Just a constant to hold the userID of the world. TODO: try using a #define
 
 new pointOwner = 0; // the team that currently owns the point
-
-#define TEAM_FLAG  2
-#define TEAM_NON_FLAG  3
 
 
 public Plugin:myinfo = {
@@ -50,7 +53,7 @@ public OnPluginStart() {
     for (new client = 0; client <= MaxClients; client++) {
         if (!IsValidClient(client)) continue;
         SetEntProp(client, Prop_Send, "m_bGlowEnabled", 0)
-        checkTeam(client)
+        checkTeam(GetClientUserId(client))
     }
 }
 
@@ -66,7 +69,7 @@ public OnClientDisconnect(client) {
 }
 
 public handleTeamChange(Handle:event, const String:name[], bool:dontBroadcast) {
-    checkTeam(GetEventInt(event, "userid"))
+    //checkTeam(GetEventInt(event, "userid"))
 }
 
 public handleResupply(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -75,7 +78,6 @@ public handleResupply(Handle:event, const String:name[], bool:dontBroadcast) {
 
     // Force the class to solider. TODO: or demoman
     if (TF2_GetPlayerClass(client) != TFClass_Soldier) {
-        //ServerCommand("say resup")
         TF2_SetPlayerClass(client, TFClass_Soldier, false, true)
         TF2_RegeneratePlayer(client)
     }
@@ -86,7 +88,14 @@ public handleResupply(Handle:event, const String:name[], bool:dontBroadcast) {
 }
 
 public checkTeam(userid) {
-
+    new client = GetClientOfUserId(userid)
+    if (!IsValidClient(client)) return
+    new team = GetClientTeam(client)
+    // Force the class to solider. TODO: or demoman
+    if (team == TEAM_FLAG  &&  GetClientUserId(client) != currentFlagHolder) {
+        ChangeClientTeam(client, TEAM_NON_FLAG)
+        TF2_RegeneratePlayer(client)
+    }
 }
 
 public initMap() {
@@ -118,15 +127,7 @@ public handleDeath(Handle:event, const String:name[], bool:dontBroadcast) {
 
 public handleSpawn(Handle:event, const String:name[], bool:dontBroadcast) {
     new userid = GetEventInt(event, "userid")
-    new client = GetClientOfUserId(userid)
-    new team = GetClientTeam(client)
-    
-
-    // Force the class to solider. TODO: or demoman
-    if (team == TEAM_FLAG  &&  userid != currentFlagHolder) {
-        ChangeClientTeam(client, TEAM_NON_FLAG)
-        TF2_RegeneratePlayer(client)
-    }
+    checkTeam(userid)
 }
 
 
@@ -145,7 +146,7 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
         instantRespawn(userid)
     }
     //(currentFlagHolder == userid || currentFlagHolder == WORLD)  && attacker != currentFlagHolder && attacker != WORLD) { // The flagholder dies when other hit him
-    else if (attacker!=WORLD && attacker!=userid && (currentFlagHolder==userid || (currentFlagHolder)==WORLD)) {
+    else if (attacker!=WORLD && attacker!=userid && (currentFlagHolder==userid || (currentFlagHolder)==WORLD) && !flagHolderUbererd) {
         setFlagHolder(attacker)
         instantRespawn(userid)
     }
@@ -185,7 +186,6 @@ setFlagHolder(userid) {
         GetClientAbsOrigin(newFlagHolder, FlagHolderOrigin); 
         GetClientAbsAngles(newFlagHolder, FlagHolderAngles);
         GetEntPropVector(newFlagHolder, Prop_Data, "m_vecVelocity", FlagHolderVelocity);
-        //ServerCommand("say FlagHolder changedDone: %d ==> %d", currentFlagHolder, userid)
         shouldRespawn = true;
     }
 
@@ -237,7 +237,9 @@ public Action:Timer_RespawnPlayer(Handle:timer, any:client) {
                 SetEntProp(client, Prop_Send, "m_bGlowEnabled", 1)
                 TeleportEntity(client, FlagHolderOrigin, FlagHolderAngles, FlagHolderVelocity)
                 TF2_AddCondition(client, TFCond_Kritzkrieged, 9001.0)
-                TF2_AddCondition(client, TFCond_Ubercharged, 3.0)    
+                TF2_AddCondition(client, TFCond_Ubercharged, UBER_TIME)
+                CreateTimer(UBER_TIME, Timer_unUber)
+                flagHolderUbererd = true;
                 shouldRespawn = false;
             }
             else 
@@ -248,6 +250,10 @@ public Action:Timer_RespawnPlayer(Handle:timer, any:client) {
         PrintToConsole(client, "[SM] Trying to respawn alive player\n");
 }
 
+
+public Action:Timer_unUber(Handle:timer) {
+    flagHolderUbererd = false
+}
 
 public Action:DissolveEnt(Handle:timer, any:entIndex) {
     if (!IsValidEntity(entIndex)) {
