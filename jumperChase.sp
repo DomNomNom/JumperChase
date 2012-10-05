@@ -1,17 +1,20 @@
 #include <sourcemod>
 #include <sdktools>
 #include <tf2_stocks> // respawn
-
+#include <sdkhooks>
 
 
 new Float:FlagHolderOrigin[3];
 new Float:FlagHolderAngles[3];
+new Float:FlagHolderVelocity[3];
 new shouldRespawn = false;
 
 new currentFlagHolder = 0;
 
+new Handle:spawnBlockRemoveTimer = INVALID_HANDLE;
 new Handle:doorchecktimer = INVALID_HANDLE; // checks that the doors are open at all times
 new checkdoors = true;
+
 
 new WORLD = 0; // Just a constant to hold the userID of the world. TODO: try using a #define
 
@@ -56,6 +59,8 @@ public OnMapStart() {
     initMap()
 }
 
+
+
 public OnClientDisconnect(client) {
     // TODO: check whether the flag holder left
 }
@@ -87,6 +92,7 @@ public checkTeam(userid) {
 public initMap() {
     ServerCommand("mp_teams_unbalance_limit 0")
     ServerCommand("mp_friendlyfire 1")
+    ServerCommand("sv_alltalk 1")
 
 
     SetControlPoint(false) // don't enable manual capture of the point
@@ -94,6 +100,10 @@ public initMap() {
     // remove spawn protection (doors)
     if (doorchecktimer == INVALID_HANDLE)
         doorchecktimer = CreateTimer(1.0, Timer_CheckDoors, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
+    
+    //if (spawnBlockRemoveTimer == INVALID_HANDLE)
+    //    spawnBlockRemoveTimer = CreateTimer(1.0, DissolveEnt, "func_respawnroomvisualizer"); 
+    
     ServerCommand("sv_cheats 1")
     ServerCommand("ent_remove_all func_respawnroomvisualizer") // This kinda does irrepairable damadge to the map. TODO find a nicer way
     ServerCommand("sv_cheats 0")
@@ -174,18 +184,12 @@ setFlagHolder(userid) {
         ChangeClientTeam(newFlagHolder, TEAM_FLAG);
         GetClientAbsOrigin(newFlagHolder, FlagHolderOrigin); 
         GetClientAbsAngles(newFlagHolder, FlagHolderAngles);
+        GetEntPropVector(newFlagHolder, Prop_Data, "m_vecVelocity", FlagHolderVelocity);
+        //ServerCommand("say FlagHolder changedDone: %d ==> %d", currentFlagHolder, userid)
         shouldRespawn = true;
     }
 
 
-    //TeleportEntity(newFlagHolder, Spawn, SpawnAngles, vel)
-
-
-    // TODO TeleportEntity(client,g_fArenaSpawnOrigin[arena_index
-    // ][RandomSpawn[i]],g_fArenaSpawnAngles[arena_index][RandomSpawn[i]],vel)
-    // ;
-
-    
     currentFlagHolder = userid
 }
 
@@ -231,7 +235,9 @@ public Action:Timer_RespawnPlayer(Handle:timer, any:client) {
         if (client == GetClientOfUserId(currentFlagHolder)) {
             if (shouldRespawn) {
                 SetEntProp(client, Prop_Send, "m_bGlowEnabled", 1)
-                TeleportEntity(client, FlagHolderOrigin, FlagHolderAngles, NULL_VECTOR)
+                TeleportEntity(client, FlagHolderOrigin, FlagHolderAngles, FlagHolderVelocity)
+                TF2_AddCondition(client, TFCond_Kritzkrieged, 9001.0)
+                TF2_AddCondition(client, TFCond_Ubercharged, 3.0)    
                 shouldRespawn = false;
             }
             else 
@@ -243,7 +249,26 @@ public Action:Timer_RespawnPlayer(Handle:timer, any:client) {
 }
 
 
+public Action:DissolveEnt(Handle:timer, any:entIndex) {
+    if (!IsValidEntity(entIndex)) {
+        return Plugin_Continue;
+    }
+    
+    new String:dname[16], String:dtype[8];
+    Format(dname, sizeof(dname), "dis_%d", entIndex);
+    Format(dtype, sizeof(dtype), "%d", 0); // disolve type
 
+    new ent = CreateEntityByName("env_entity_dissolver");
+    if (ent != -1) {
+        DispatchKeyValue(entIndex, "targetname", dname);
+        DispatchKeyValue(ent, "dissolvetype", "1");
+        DispatchKeyValue(ent, "target", dname);
+        AcceptEntityInput(ent, "Dissolve");
+        AcceptEntityInput(ent, "kill");
+    }
+
+    return Plugin_Continue;
+}  
 
 public Action:Timer_CheckDoors(Handle:timer) {
     if (!checkdoors) { // when we should stop
