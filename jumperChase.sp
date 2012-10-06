@@ -17,14 +17,11 @@ new shouldRespawn = false;
 
 new currentFlagHolder = 0;
 
-new Handle:spawnBlockRemoveTimer = INVALID_HANDLE;
 new Handle:doorchecktimer = INVALID_HANDLE; // checks that the doors are open at all times
 new checkdoors = true;
 
 
 new WORLD = 0; // Just a constant to hold the userID of the world. TODO: try using a #define
-
-new pointOwner = 0; // the team that currently owns the point
 
 
 public Plugin:myinfo = {
@@ -63,6 +60,9 @@ public OnMapStart() {
 
 public OnClientDisconnect(client) {
     // TODO: check whether the flag holder left
+    ServerCommand("say %d left", client)
+    if (GetClientUserId(client) == currentFlagHolder)
+        setFlagHolder(WORLD)
 }
 
 public handleTeamChange(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -107,8 +107,6 @@ public initMap() {
     if (doorchecktimer == INVALID_HANDLE)
         doorchecktimer = CreateTimer(1.0, Timer_CheckDoors, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
     
-    if (spawnBlockRemoveTimer == INVALID_HANDLE)
-        spawnBlockRemoveTimer = CreateTimer(1.0, DissolveEnt); 
     
     //ServerCommand("sv_cheats 1")
     //ServerCommand("ent_remove_all func_respawnroomvisualizer") // This kinda does irrepairable damadge to the map. TODO find a nicer way
@@ -135,8 +133,6 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
     new client = GetClientOfUserId(userid)
     new damadge = GetEventInt(event, "damageamount")
 
-    pointOwner += 1;
-    SetControlPointOwner(pointOwner);
     //PrintToChat(client, "hurt %d ==[%d]==> %d", attacker, damadge, userid)
 
     if (attacker == WORLD && damadge >= 500) { // kill the player if the world is trying to kill him
@@ -186,6 +182,8 @@ setFlagHolder(userid) {
         shouldRespawn = true;
     }
 
+    if (newFlagHolder == 0) 
+        ServerCommand("say === FREE FOR ALL ===")
 
     currentFlagHolder = userid
 }
@@ -252,46 +250,6 @@ public Action:Timer_unUber(Handle:timer) {
     flagHolderUbererd = false
 }
 
-public Action:DissolveEnt(Handle:timer, any:entIndex) {
-    if (!IsValidEntity(entIndex)) {
-        return Plugin_Continue;
-    }
-    
-    new String:dname[16], String:dtype[8];
-    Format(dname, sizeof(dname), "dis_%d", entIndex);
-    Format(dtype, sizeof(dtype), "%d", 0); // disolve type
-
-    new ent = CreateEntityByName("env_entity_dissolver");
-    if (ent != -1) {
-        DispatchKeyValue(entIndex, "targetname", dname);
-        DispatchKeyValue(ent, "dissolvetype", "1");
-        DispatchKeyValue(ent, "target", dname);
-        AcceptEntityInput(ent, "Dissolve");
-        AcceptEntityInput(ent, "kill");
-    }
-
-    return Plugin_Continue;
-}
-
-public removeEnt(any:entIndex) { 
-    if (!IsValidEntity(entIndex))
-        return;
-    
-    new String:dname[16], String:dtype[8];
-    Format(dname, sizeof(dname), "dis_%d", entIndex);
-    Format(dtype, sizeof(dtype), "%d", 0); // disolve type
-
-    new ent = CreateEntityByName("env_entity_dissolver");
-    if (ent != -1) {
-        DispatchKeyValue(entIndex, "targetname", dname);
-        DispatchKeyValue(ent, "dissolvetype", "1");
-        DispatchKeyValue(ent, "target", dname);
-        AcceptEntityInput(ent, "Dissolve");
-        AcceptEntityInput(ent, "kill");
-    }
-}
-
-
 public Action:Timer_CheckDoors(Handle:timer) {
     if (!checkdoors) { // when we should stop
         doorchecktimer = INVALID_HANDLE;
@@ -310,7 +268,7 @@ public Action:Timer_CheckDoors(Handle:timer) {
         AcceptEntityInput(ent, "Open");
         AcceptEntityInput(ent, "Unlock");
     }
-
+    SetControlPointOwner(TEAM_FLAG);
     return Plugin_Continue;
 }
 
@@ -330,14 +288,21 @@ stock ForceTeamWin(team) {
 
 stock SetControlPointOwner(team) {
     //SetControlPoint(true);
-    new ent=-1; //CP = -1;
+    //ServerCommand("say changed owner %d", team)
+    new ent=-1;
     while ((ent = FindEntityByClassname2(ent, "team_control_point")) != -1) {
-        if (ent > MaxClients && IsValidEdict(ent)) {
-            //ServerCommand("say changed owner %d", team)
+
+        //SetVariantInt(0);
+        //AcceptEntityInput(ent, "SetLocked");
+
+        //SetVariantInt(2);
+        //AcceptEntityInput(ent, "SetOwner");
+
+        //DispatchKeyValue(ent, "SetOwner", "2");
 
             //AcceptEntityInput(ent,  "ShowModel");
-            SetVariantInt(team);
-            AcceptEntityInput(ent, "SetOwner");
+            //SetVariantInt(team);
+            //AcceptEntityInput(ent, "SetOwner");
             //SetVariantInt(team);
             //AcceptEntityInput(ent, "FireUser1");
 
@@ -354,21 +319,19 @@ stock SetControlPointOwner(team) {
 
             // teamplay_round_start
             
+            /*
             new Handle:event = CreateEvent("controlpoint_starttouch")
             if (event == INVALID_HANDLE) {
                 ServerCommand("say INVALID_HANDLE!")
                 return
-            }
-            //SetEventInt(event, "userid", GetClientUserId(victim))
-            //SetEventInt(event, "attacker", GetClientUserId(attacker))
-            //SetEventString(event, "weapon", weapon)
+            }*/
             //SetEventBool(event, "headshot", headshot)
-            FireEvent(event)
+            //FireEvent(event)
 
             //ServerCommand("say success!")
-        }
     }
 
+    //ServerCommand("say changed owner END")
     //ent = FindEntityByClassname2(-1, "team_control_point_master");
     //SetVariantInt(team);
     //AcceptEntityInput(ent, "SetWinner");
