@@ -31,15 +31,12 @@ public Plugin:myinfo = {
     name = "JumperChase",
     author = "Dominik Schmid",
     description = "A mod about rocket jumping like crazy and hitting huge middies",
-    version = "0.0.5",
+    version = "0.1.0",
     url = "dominikschmid.de",
 }
 
 
 public OnPluginStart() {
-    //SetConVarInt(FindConVar("mp_teams_unbalance_limit"), 0); 
-    //initMap()
-
     HookEvent("player_hurt", handleHurt, EventHookMode_Pre)
     HookEvent("player_spawn", handleSpawn, EventHookMode_Post)
     HookEvent("player_death", handleDeath, EventHookMode_Post)
@@ -110,12 +107,12 @@ public initMap() {
     if (doorchecktimer == INVALID_HANDLE)
         doorchecktimer = CreateTimer(1.0, Timer_CheckDoors, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
     
-    //if (spawnBlockRemoveTimer == INVALID_HANDLE)
-    //    spawnBlockRemoveTimer = CreateTimer(1.0, DissolveEnt, "func_respawnroomvisualizer"); 
+    if (spawnBlockRemoveTimer == INVALID_HANDLE)
+        spawnBlockRemoveTimer = CreateTimer(1.0, DissolveEnt); 
     
-    ServerCommand("sv_cheats 1")
-    ServerCommand("ent_remove_all func_respawnroomvisualizer") // This kinda does irrepairable damadge to the map. TODO find a nicer way
-    ServerCommand("sv_cheats 0")
+    //ServerCommand("sv_cheats 1")
+    //ServerCommand("ent_remove_all func_respawnroomvisualizer") // This kinda does irrepairable damadge to the map. TODO find a nicer way
+    //ServerCommand("sv_cheats 0")
 }
 
 //public OnClientDied(attacker, victim, const String:weapon[], bool:headshot){
@@ -171,7 +168,7 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
 // SET FLAG HOLDER
 
 setFlagHolder(userid) {
-    ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, userid)
+    //ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, userid)
     //PrintCenterText(GetClientOfUserId(userid), "YOU ARE IT!")
     new oldFlagHolder = GetClientOfUserId(currentFlagHolder)
     new newFlagHolder = GetClientOfUserId(userid)
@@ -274,7 +271,26 @@ public Action:DissolveEnt(Handle:timer, any:entIndex) {
     }
 
     return Plugin_Continue;
-}  
+}
+
+public removeEnt(any:entIndex) { 
+    if (!IsValidEntity(entIndex))
+        return;
+    
+    new String:dname[16], String:dtype[8];
+    Format(dname, sizeof(dname), "dis_%d", entIndex);
+    Format(dtype, sizeof(dtype), "%d", 0); // disolve type
+
+    new ent = CreateEntityByName("env_entity_dissolver");
+    if (ent != -1) {
+        DispatchKeyValue(entIndex, "targetname", dname);
+        DispatchKeyValue(ent, "dissolvetype", "1");
+        DispatchKeyValue(ent, "target", dname);
+        AcceptEntityInput(ent, "Dissolve");
+        AcceptEntityInput(ent, "kill");
+    }
+}
+
 
 public Action:Timer_CheckDoors(Handle:timer) {
     if (!checkdoors) { // when we should stop
@@ -282,12 +298,19 @@ public Action:Timer_CheckDoors(Handle:timer) {
         return Plugin_Stop;
     }
 
-    // open all doors
+    // stop all spawn protetors 
     new ent = -1;
+    while ((ent = FindEntityByClassname2(ent, "func_respawnroomvisualizer")) != -1) {
+        AcceptEntityInput(ent, "Disable");
+    }
+
+    // open all doors
+    ent = -1;
     while ((ent = FindEntityByClassname2(ent, "func_door")) != -1) {
         AcceptEntityInput(ent, "Open");
         AcceptEntityInput(ent, "Unlock");
     }
+
     return Plugin_Continue;
 }
 
