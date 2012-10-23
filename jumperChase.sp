@@ -59,8 +59,6 @@ public OnMapStart() {
 
 
 public OnClientDisconnect(client) {
-    // TODO: check whether the flag holder left
-    ServerCommand("say %d left", client)
     if (GetClientUserId(client) == currentFlagHolder)
         setFlagHolder(WORLD)
 }
@@ -99,9 +97,6 @@ public initMap() {
     ServerCommand("mp_teams_unbalance_limit 0")
     ServerCommand("mp_friendlyfire 1")
     ServerCommand("sv_alltalk 1")
-
-
-    SetControlPoint(false) // don't enable manual capture of the point
 
     // remove spawn protection (doors)
     if (doorchecktimer == INVALID_HANDLE)
@@ -269,6 +264,9 @@ public Action:Timer_CheckDoors(Handle:timer) {
         AcceptEntityInput(ent, "Unlock");
     }
     SetControlPointOwner(TEAM_FLAG);
+
+    SetControlPoint(false) // don't enable manual capture of the point  
+
     return Plugin_Continue;
 }
 
