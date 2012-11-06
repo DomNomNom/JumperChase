@@ -168,17 +168,20 @@ setFlagHolder(userid) {
         SetEntProp(oldFlagHolder, Prop_Send, "m_bGlowEnabled", 0);
         ChangeClientTeam(oldFlagHolder, TEAM_NON_FLAG);
     }
+
     if (IsValidClient(newFlagHolder)) {
-        SetEntProp(newFlagHolder, Prop_Send, "m_bGlowEnabled", 1)
+        //SetEntProp(newFlagHolder, Prop_Send, "m_bGlowEnabled", 1)
         ChangeClientTeam(newFlagHolder, TEAM_FLAG);
         GetClientAbsOrigin(newFlagHolder, FlagHolderOrigin); 
         GetClientAbsAngles(newFlagHolder, FlagHolderAngles);
         GetEntPropVector(newFlagHolder, Prop_Data, "m_vecVelocity", FlagHolderVelocity);
         shouldRespawn = true;
+        setRoundTimer(true);
     }
-
-    if (newFlagHolder == 0) 
+    else { // newFlagHolder == 0
         ServerCommand("say === FREE FOR ALL ===")
+        setRoundTimer(false);
+    }
 
     currentFlagHolder = userid
 }
@@ -263,7 +266,7 @@ public Action:Timer_CheckDoors(Handle:timer) {
         AcceptEntityInput(ent, "Open");
         AcceptEntityInput(ent, "Unlock");
     }
-    SetControlPointOwner(TEAM_FLAG);
+    //SetControlPointOwner(TEAM_FLAG);
 
     SetControlPoint(false) // don't enable manual capture of the point  
 
@@ -284,12 +287,22 @@ stock ForceTeamWin(team) {
 }
 */
 
+stock setRoundTimer(bool:enable) {
+    new ent=-1; // our gamerules entitiy
+    // tf_gamerules / SetBlueKothClockActive
+    while ((ent = FindEntityByClassname2(ent, "team_round_timer")) != -1) {
+        if (enable) AcceptEntityInput(ent, "Resume");
+        else        AcceptEntityInput(ent, "Pause" );
+        ServerCommand("say Activated my clock");
+    }
+}
+
 stock SetControlPointOwner(team) {
     //SetControlPoint(true);
-    //ServerCommand("say changed owner %d", team)
+    ServerCommand("say changed owner %d", team)
     new ent=-1;
-    while ((ent = FindEntityByClassname2(ent, "team_control_point")) != -1) {
-
+    while ((ent = FindEntityByClassname2(ent, "gamerules")) != -1) {
+        ServerCommand("say found my gamerules!");
         //SetVariantInt(0);
         //AcceptEntityInput(ent, "SetLocked");
 
@@ -359,35 +372,3 @@ stock bool:IsValidClient(client, bool:replaycheck = true) {
         if (IsClientSourceTV(client) || IsClientReplay(client)) return false;
     return true;
 }
-
-/*stock SetArenaCapEnableTime(Float:time)
-{
-    new ent = -1;
-    decl String:strTime[32];
-    FloatToString(time, strTime, sizeof(strTime));
-    if ((ent = FindEntityByClassname2(-1, "tf_logic_arena")) != -1 && IsValidEdict(ent))
-    {
-        DispatchKeyValue(ent, "CapEnableDelay", strTime);
-    }
-}
-*/
-/*
-public Action:Timer_EnableCap(Handle:timer)
-{
-    if (VSHRoundState == -1)
-    {
-        SetControlPoint(true);
-        if (checkdoors)
-        {
-            new ent = -1;
-            while ((ent = FindEntityByClassname2(ent, "func_door")) != -1)
-            {
-                AcceptEntityInput(ent, "Open");
-                AcceptEntityInput(ent, "Unlock");
-            }
-            if (doorchecktimer == INVALID_HANDLE)
-                doorchecktimer = CreateTimer(5.0, Timer_CheckDoors, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
-        }
-    }
-}
-*/
