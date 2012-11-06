@@ -6,6 +6,9 @@
 #define TEAM_FLAG  2
 #define TEAM_NON_FLAG  3
 
+#define WORLD  0
+
+#define TRACKED_PLAYER_COUNT MAXPLAYERS+1
 
 #define UBER_TIME 3.0
 new flagHolderUbererd = false;
@@ -20,8 +23,12 @@ new currentFlagHolder = 0;
 new Handle:doorchecktimer = INVALID_HANDLE; // checks that the doors are open at all times
 new checkdoors = true;
 
+// Time-keeping stuff
+new timeLeft[TRACKED_PLAYER_COUNT],
+    ent_roundTimer = -1,
+    timerInitialLength = -1,
+    flagStartTime;
 
-new WORLD = 0; // Just a constant to hold the userID of the world. TODO: try using a #define
 
 
 public Plugin:myinfo = {
@@ -34,6 +41,12 @@ public Plugin:myinfo = {
 
 
 public OnPluginStart() {
+    ent_roundTimer = FindEntityByClassname2(-1, "team_round_timer");
+    if (ent_roundTimer == -1) return; // we should't continue if the map doesn't have a timer.
+    timerInitialLength = GetEntProp(ent_roundTimer, Prop_Send, "m_nTimerInitialLength");
+    for (new i=0; i<TRACKED_PLAYER_COUNT; ++i)
+        timeLeft[i] = timerInitialLength;
+
     HookEvent("player_hurt", handleHurt, EventHookMode_Pre)
     HookEvent("player_spawn", handleSpawn, EventHookMode_Post)
     HookEvent("player_death", handleDeath, EventHookMode_Post)
@@ -53,7 +66,14 @@ public OnPluginStart() {
 
 
 public OnMapStart() {
-    initMap()
+
+    ServerCommand("mp_teams_unbalance_limit 0")
+    ServerCommand("mp_friendlyfire 1")
+    ServerCommand("sv_alltalk 1")
+
+    // remove spawn protection (doors)
+    if (doorchecktimer == INVALID_HANDLE)
+        doorchecktimer = CreateTimer(1.0, Timer_CheckDoors, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
 }
 
 
@@ -61,6 +81,7 @@ public OnMapStart() {
 public OnClientDisconnect(client) {
     if (GetClientUserId(client) == currentFlagHolder)
         setFlagHolder(WORLD)
+    timeLeft[client] = timerInitialLength
 }
 
 public handleTeamChange(Handle:event, const String:name[], bool:dontBroadcast) {
@@ -91,21 +112,6 @@ public checkTeam(userid) {
         ChangeClientTeam(client, TEAM_NON_FLAG)
         TF2_RegeneratePlayer(client)
     }
-}
-
-public initMap() {
-    ServerCommand("mp_teams_unbalance_limit 0")
-    ServerCommand("mp_friendlyfire 1")
-    ServerCommand("sv_alltalk 1")
-
-    // remove spawn protection (doors)
-    if (doorchecktimer == INVALID_HANDLE)
-        doorchecktimer = CreateTimer(1.0, Timer_CheckDoors, _, TIMER_FLAG_NO_MAPCHANGE|TIMER_REPEAT);
-    
-    
-    //ServerCommand("sv_cheats 1")
-    //ServerCommand("ent_remove_all func_respawnroomvisualizer") // This kinda does irrepairable damadge to the map. TODO find a nicer way
-    //ServerCommand("sv_cheats 0")
 }
 
 //public OnClientDied(attacker, victim, const String:weapon[], bool:headshot){
@@ -159,7 +165,7 @@ public handleHurt(Handle:event, const String:name[], bool:dontBroadcast) {
 // SET FLAG HOLDER
 
 setFlagHolder(userid) {
-    //ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, userid)
+    ServerCommand("say FlagHolder changed: %d ==> %d", currentFlagHolder, userid)
     //PrintCenterText(GetClientOfUserId(userid), "YOU ARE IT!")
     new oldFlagHolder = GetClientOfUserId(currentFlagHolder)
     new newFlagHolder = GetClientOfUserId(userid)
@@ -167,6 +173,7 @@ setFlagHolder(userid) {
     if (IsValidClient(oldFlagHolder)) {
         SetEntProp(oldFlagHolder, Prop_Send, "m_bGlowEnabled", 0);
         ChangeClientTeam(oldFlagHolder, TEAM_NON_FLAG);
+        timeLeft[oldFlagHolder] -= GetTime()-flagStartTime;
     }
 
     if (IsValidClient(newFlagHolder)) {
@@ -176,11 +183,16 @@ setFlagHolder(userid) {
         GetClientAbsAngles(newFlagHolder, FlagHolderAngles);
         GetEntPropVector(newFlagHolder, Prop_Data, "m_vecVelocity", FlagHolderVelocity);
         shouldRespawn = true;
-        setRoundTimer(true);
+
+        //ServerCommand("say here's the new time: %f", timeLeft[newFlagHolder])
+        //SetEntPropFloat(ent_roundTimer, Prop_Send, "m_flTimeRemaining", timeLeft[newFlagHolder])
+        
+        flagStartTime = GetTime()
+        setRoundTimer(timeLeft[newFlagHolder], true);
     }
-    else { // newFlagHolder == 0
+    else { // newFlagHolder == WORLD
         ServerCommand("say === FREE FOR ALL ===")
-        setRoundTimer(false);
+        setRoundTimer(timerInitialLength, false);
     }
 
     currentFlagHolder = userid
@@ -235,12 +247,12 @@ public Action:Timer_RespawnPlayer(Handle:timer, any:client) {
                 flagHolderUbererd = true;
                 shouldRespawn = false;
             }
-            else 
+            else
                 setFlagHolder(WORLD);
         }
     }
     else
-        PrintToConsole(client, "[SM] Trying to respawn alive player\n");
+        PrintToConsole(client, "[DT] Trying to respawn alive player\n");
 }
 
 
@@ -266,98 +278,19 @@ public Action:Timer_CheckDoors(Handle:timer) {
         AcceptEntityInput(ent, "Open");
         AcceptEntityInput(ent, "Unlock");
     }
-    //SetControlPointOwner(TEAM_FLAG);
-
-    SetControlPoint(false) // don't enable manual capture of the point  
 
     return Plugin_Continue;
 }
 
 
-/*
-stock ForceTeamWin(team) {
-    new ent = FindEntityByClassname2(-1, "team_control_point_master");
-    if (ent == -1) {
-        ent = CreateEntityByName("team_control_point_master");
-        DispatchSpawn(ent);
-        AcceptEntityInput(ent, "Enable");
-    }
-    SetVariantInt(team);
-    AcceptEntityInput(ent, "SetWinner");
-}
-*/
+stock setRoundTimer(time, bool:enable) {
+    if (enable) AcceptEntityInput(ent_roundTimer, "Resume");
+    else        AcceptEntityInput(ent_roundTimer, "Pause" );
 
-stock setRoundTimer(bool:enable) {
-    new ent=-1; // our gamerules entitiy
-    // tf_gamerules / SetBlueKothClockActive
-    while ((ent = FindEntityByClassname2(ent, "team_round_timer")) != -1) {
-        if (enable) AcceptEntityInput(ent, "Resume");
-        else        AcceptEntityInput(ent, "Pause" );
-        ServerCommand("say Activated my clock");
-    }
+    SetVariantInt(time);
+    AcceptEntityInput(ent_roundTimer, "SetTime");
 }
 
-stock SetControlPointOwner(team) {
-    //SetControlPoint(true);
-    ServerCommand("say changed owner %d", team)
-    new ent=-1;
-    while ((ent = FindEntityByClassname2(ent, "gamerules")) != -1) {
-        ServerCommand("say found my gamerules!");
-        //SetVariantInt(0);
-        //AcceptEntityInput(ent, "SetLocked");
-
-        //SetVariantInt(2);
-        //AcceptEntityInput(ent, "SetOwner");
-
-        //DispatchKeyValue(ent, "SetOwner", "2");
-
-            //AcceptEntityInput(ent,  "ShowModel");
-            //SetVariantInt(team);
-            //AcceptEntityInput(ent, "SetOwner");
-            //SetVariantInt(team);
-            //AcceptEntityInput(ent, "FireUser1");
-
-/*
-            new String:addoutput[64];
-            Format(addoutput, sizeof(addoutput), "OnUser1 !self:setowner:%i:0:1",team);
-            SetVariantString(addoutput);
-            AcceptEntityInput(ent, "AddOutput");
-            AcceptEntityInput(ent, "FireUser1");
-*/
-
-            //name: controlpoint_updateowner
-            //short:   index  -  index of the cap being updated
-
-            // teamplay_round_start
-            
-            /*
-            new Handle:event = CreateEvent("controlpoint_starttouch")
-            if (event == INVALID_HANDLE) {
-                ServerCommand("say INVALID_HANDLE!")
-                return
-            }*/
-            //SetEventBool(event, "headshot", headshot)
-            //FireEvent(event)
-
-            //ServerCommand("say success!")
-    }
-
-    //ServerCommand("say changed owner END")
-    //ent = FindEntityByClassname2(-1, "team_control_point_master");
-    //SetVariantInt(team);
-    //AcceptEntityInput(ent, "SetWinner");
-}
-
-stock SetControlPoint(bool:enable) {
-    new CPm=-1; //CP = -1;
-    while ((CPm = FindEntityByClassname2(CPm, "team_control_point")) != -1) {
-        if (CPm > MaxClients && IsValidEdict(CPm)) {
-            AcceptEntityInput(CPm, (enable ? "ShowModel" : "HideModel"));
-            SetVariantInt(enable ? 0 : 1);
-            AcceptEntityInput(CPm, "SetLocked");
-        }
-    }
-}
 stock FindEntityByClassname2(startEnt, const String:classname[]) {
     /* If startEnt isn't valid shifting it back to the nearest valid one */
     while (startEnt > -1 && !IsValidEntity(startEnt)) startEnt--;
